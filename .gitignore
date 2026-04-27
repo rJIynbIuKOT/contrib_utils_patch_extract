@@ -1,0 +1,54 @@
+# В каталоге contrib/ публикуем только сами скрипты и их README,
+# а пользовательские contrib.json/differences.sgml и сгенерированные *.txt — нет.
+contrib/*
+!contrib/contrib.py
+!contrib/contrib_from_differences.py
+!contrib/README.md
+!contrib/README_contrib_from_differences.md
+
+# В каталоге contrib_ext_programs/ публикуем только сам скрипт и README,
+# а пользовательский config.json и сгенерированный ext.txt — нет.
+contrib_ext_programs/*
+!contrib_ext_programs/ext.py
+!contrib_ext_programs/README.md
+
+# В каталоге fstek/ публикуем только сам скрипт и README,
+# а пользовательский config.json и сгенерированные *.txt — нет.
+fstek/*
+!fstek/fstek.py
+!fstek/README.md
+
+# В каталоге nexus/ публикуем только сам скрипт и README,
+# а пользовательский nexus.json и сгенерированные *.txt — нет.
+nexus/*
+!nexus/nexus.py
+!nexus/README.md
+
+# В каталоге patches_gucs_from_confjson/ публикуем только сам скрипт и README,
+# а пользовательский conf.json и сгенерированный pathes.csv — нет.
+patches_gucs_from_confjson/*
+!patches_gucs_from_confjson/export_patches_csv.py
+!patches_gucs_from_confjson/README.md
+
+# В каталоге utils/ публикуем только сам скрипт и README,
+# а пользовательские utils.json/conf.json и сгенерированные *.txt — нет.
+utils/*
+!utils/utils.py
+!utils/README.md
+
+# В каталоге ppk/ публикуем только сам скрипт и README,
+# а пользовательские *.json (ППК_Tantor_*.json и т.п.) и сгенерированные *.txt — нет.
+ppk/*
+!ppk/ppk.py
+!ppk/README.md
+
+# В каталоге patch_to_core_improvements/ публикуем только сами скрипты и README,
+# а пользовательские conf.json/order.json/patch_descriptions.json/differences.sgml
+# и сгенерированные *.sgml/*.txt — нет.
+patch_to_core_improvements/*
+!patch_to_core_improvements/generate_core_improvements_sgml.py
+!patch_to_core_improvements/README.md
+
+# Python-артефакты
+__pycache__/
+*.py[cod]
