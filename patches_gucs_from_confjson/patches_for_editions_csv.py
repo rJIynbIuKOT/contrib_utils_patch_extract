@@ -9,7 +9,7 @@ from pathlib import Path
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULT_LOCAL = 'conf.json'
-OUTPUT_FILE = 'pathes.csv'
+OUTPUT_FILE = 'patches_for_editions.csv'
 
 EDITION_ORDER = ["be", "se", "se1c", "certified", "certified_2", "free"]
 

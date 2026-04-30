@@ -29,6 +29,12 @@ nexus/*
 patches_gucs_from_confjson/*
 !patches_gucs_from_confjson/export_patches_csv.py
 !patches_gucs_from_confjson/README.md
+!patches_for_editions_csv.py
+!patches_and_gucs_csv.py
+!patches_and_gucs_csv_all_versions.py
+!summ_patches_and_gucs_csv_all_versions.py
+!csv_to_conf.py
+
 
 # В каталоге utils/ публикуем только сам скрипт и README,
 # а пользовательские utils.json/conf.json и сгенерированные *.txt — нет.

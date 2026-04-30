@@ -32,9 +32,17 @@
 
 - `nexus.py` — формирует `nexus.txt` со строками `<name> <version> <git_url> <commit_sha>` из `nexus.json`. От `fstek/fstek.py` отличается раскладкой JSON: компоненты лежат внутри ключа `components`, и `version`/`git` находятся прямо в компоненте, без вложения в `general`. Подробно: [nexus/README.md](nexus/README.md).
 
-### `patches_gucs_from_confjson/` — матрица «patch × edition»
+### `patches_gucs_from_confjson/` — pipeline по патчам и GUC
 
-- `export_patches_csv.py` — строит CSV `pathes.csv` (имя историческое, с опечаткой) с заголовком `patch,be,se,se1c,certified,certified_2,free` и метками `y` в нужных колонках по блоку `editions[<ed>].patches` из `conf.json`. Список изданий жёстко зашит в `EDITION_ORDER`. Подробно: [patches_gucs_from_confjson/README.md](patches_gucs_from_confjson/README.md).
+Связанный набор из 5 скриптов (типовой порядок запуска):
+
+1. `patches_for_editions_csv.py` — базовая матрица `patch × edition` из одного `conf.json` (`patches_for_editions.csv`).
+2. `patches_and_gucs_csv.py` — по одному репозиторию версии (`tantor-db-*`) строит `patches_and_gucs.csv` с колонками `patch,guc,doc,url`.
+3. `patches_and_gucs_csv_all_versions.py` — пакетно запускает предыдущий скрипт для набора версий и сохраняет `patches_and_gucs_<version>.csv`.
+4. `summ_patches_and_gucs_csv_all_versions.py` — агрегирует по всем версиям в `summ_patches_and_gucs_all_versions.csv`.
+5. `csv_to_conf.py` — конвертирует итоговый CSV в HTML-таблицу для Confluence (`*.confluence.html.txt`).
+
+Практически чаще всего используют цепочку `3 -> 4 -> 5`, а `patches_for_editions_csv.py` запускают отдельно для быстрого среза «патч по изданиям». Подробно: [patches_gucs_from_confjson/README.md](patches_gucs_from_confjson/README.md).
 
 ### `patch_to_core_improvements/` — генерация SGML-раздела «Core improvements»
 
@@ -55,7 +63,7 @@ contrib/                       — contrib.py + contrib_from_differences.py
 contrib_ext_programs/          — ext.py
 fstek/                         — fstek.py
 nexus/                         — nexus.py
-patches_gucs_from_confjson/    — export_patches_csv.py
+patches_gucs_from_confjson/    — patches_for_editions_csv.py + patches_and_gucs*.py + csv_to_conf.py
 patch_to_core_improvements/    — generate_core_improvements_sgml.py
 ppk/                           — ppk.py
 utils/                         — utils.py
