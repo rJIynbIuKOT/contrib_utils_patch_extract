@@ -11,11 +11,11 @@ EXPORT_SCRIPT = SCRIPT_DIR / "patches_and_gucs_csv.py"
 TEMP_OUTPUT = SCRIPT_DIR / "patches_and_gucs.csv"
 
 TARGETS = [
-    ("18", Path("/home/kot/repo/tantor-db-18_1/")),
-    ("17", Path("/home/kot/repo/tantor-db-17_9/")),
-    ("16", Path("/home/kot/repo/tantor-db-16_13/")),
-    ("15", Path("/home/kot/repo/tantor-db-15_17/")),
-    ("14", Path("/home/kot/repo/tantor-db-14_22/")),
+    ("18", Path("/home/kot/repo/tantor-db-18_3/")),
+    ("17", Path("/home/kot/repo/tantor-db-17_10/")),
+    ("16", Path("/home/kot/repo/tantor-db-16_14/")),
+    ("15", Path("/home/kot/repo/tantor-db-15_18/")),
+    ("14", Path("/home/kot/repo/tantor-db-14_23/")),
 ]
 
 

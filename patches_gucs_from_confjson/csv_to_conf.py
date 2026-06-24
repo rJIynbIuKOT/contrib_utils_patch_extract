@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import os
+import sys
+import traceback
 from pathlib import Path
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+DEFAULT_INPUT = "summ_patches_and_gucs_all_versions.csv"
 
 
 def make_html_link(guc: str, url: str) -> str:
@@ -81,7 +88,12 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Convert CSV summary with GUC links to an HTML table for Confluence."
     )
-    p.add_argument("input_csv", help="Input CSV: summ_patches_and_gucs_all_versions.csv")
+    p.add_argument(
+        "input_csv",
+        nargs="?",
+        default=DEFAULT_INPUT,
+        help=f"Input CSV. Defaults to {DEFAULT_INPUT}",
+    )
     p.add_argument(
         "-o",
         "--output",
@@ -108,5 +120,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        print("\nОшибка при выполнении:", file=sys.stderr)
+        traceback.print_exc()
+
+    try:
+        input("Нажмите Enter для закрытия терминала...")
+    except EOFError:
+        pass
 

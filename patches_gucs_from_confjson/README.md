@@ -8,6 +8,12 @@
 4. `summ_patches_and_gucs_csv_all_versions.py`
 5. `csv_to_conf.py`
 
+Для сбора и проверки всех гуков нужно использовать следующий порядок действий:
+
+1. Проверить пути ко всем веткам tantor-db в `patches_and_gucs_csv_all_versions.py` и запустить его. Получим набор `patches_and_gucs_14.csv`, `patches_and_gucs_15.csv` и так далее.
+2. Запустить `summ_patches_and_gucs_csv_all_versions.py` для объединения `patches_and_gucs_14.csv`, `patches_and_gucs_15.csv` и так далее в `summ_patches_and_gucs_all_versions.csv`.
+3. Запустить `csv_to_conf.py` для получения из `summ_patches_and_gucs_all_versions.csv` HTML-таблицы в файле `summ_patches_and_gucs_all_versions.csv.confluence.html.txt`. HTML-таблицу из этого файла можно вставлять в confluence и сравнивать с предыдущей.
+
 Ниже описание в рабочем порядке: что делает каждый шаг и как его запускать.
 
 ## Что нужно заранее
@@ -128,17 +134,28 @@
 
 ### Назначение
 
-Конвертирует `summ_patches_and_gucs_all_versions.csv` в HTML-таблицу для Confluence.
+Конвертирует CSV-сводку в HTML-таблицу для Confluence.
 
-По умолчанию создает:
+По умолчанию (без аргументов) берет входной файл `summ_patches_and_gucs_all_versions.csv`
+рядом со скриптом и создает:
 
 - `<input_csv>.confluence.html.txt`
 
 Колонка `guc` становится HTML-ссылкой, если в CSV есть `url`.
 
+Скрипт можно запускать прямо из контекстного меню Ubuntu через пункт
+«Запустить как приложение»: входной файл по умолчанию берется относительно самого
+скрипта, а после завершения работы окно ждет нажатия Enter.
+
 ### Как использовать
 
-Базовый запуск:
+Запуск с файлом по умолчанию:
+
+```bash
+./csv_to_conf.py
+```
+
+С явным входным файлом:
 
 ```bash
 ./csv_to_conf.py ./summ_patches_and_gucs_all_versions.csv
