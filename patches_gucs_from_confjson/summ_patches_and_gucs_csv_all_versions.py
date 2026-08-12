@@ -27,6 +27,38 @@ def normalize(value: str) -> str:
     return (value or "").strip()
 
 
+def documented_versions(doc_values: OrderedDict) -> list:
+    """Версии, в которых найден <varname> (порядок как в VERSION_FILES)."""
+    versions = []
+    for status, vers in doc_values.items():
+        if not status or status == "no":
+            continue
+        for version in vers:
+            if version not in versions:
+                versions.append(version)
+    return versions
+
+
+def format_aggregated_doc(guc_versions: list, doc_values: OrderedDict) -> str:
+    """Собирает doc для сводки: «<версии> yes (...); …» по группам статуса документации.
+
+    Если набор версий GUC не совпадает с набором версий, где найден <varname>,
+    в начало ставится «! » (в обе стороны: GUC без описания или описание без GUC).
+    """
+    documented = [(status, versions) for status, versions in doc_values.items() if status and status != "no"]
+    if not documented:
+        text = "no"
+    elif len(documented) == 1:
+        status, versions = documented[0]
+        text = f"{' '.join(versions)} {status}"
+    else:
+        text = "; ".join(f"{' '.join(versions)} {status}" for status, versions in documented)
+
+    if set(guc_versions) != set(documented_versions(doc_values)):
+        return f"! {text}"
+    return text
+
+
 def iter_rows(path: Path):
     """Итерирует пары (patch, guc, doc, url) с учётом продолжений строк."""
     with path.open("r", encoding="utf-8", newline="") as f:
@@ -70,7 +102,6 @@ def aggregate_rows(base_dir: Path):
             if item is None:
                 item = {
                     "versions": [],
-                    "doc": doc,
                     "url": "",
                     "doc_values": OrderedDict(),
                 }
@@ -83,23 +114,20 @@ def aggregate_rows(base_dir: Path):
                 item["doc_values"][doc] = []
             item["doc_values"][doc].append(version)
 
-            # Сохраняем doc от самой новой версии (первой в VERSION_FILES).
-            if item["doc"] == "":
-                item["doc"] = doc
-
             # Сохраняем первый непустой url в порядке от новых к старым.
             if item["url"] == "" and url:
                 item["url"] = url
 
-    # Формируем предупреждения по расхождениям doc.
+    # Предупреждаем, если статус doc (yes/no и источник) различается между версиями.
     for (patch, guc), item in merged.items():
-        distinct_docs = list(item["doc_values"].keys())
+        distinct_docs = [d for d in item["doc_values"] if d and d != "no"]
         if len(distinct_docs) <= 1:
             continue
         details = []
         for doc_value, versions in item["doc_values"].items():
-            label = doc_value if doc_value else "<empty>"
-            details.append(f'"{label}" в версиях: {" ".join(versions)}')
+            if not doc_value or doc_value == "no":
+                continue
+            details.append(f'"{doc_value}" в версиях: {" ".join(versions)}')
         doc_conflicts.append((patch, guc, "; ".join(details)))
 
     return merged, doc_conflicts
@@ -110,7 +138,13 @@ def write_output(path: Path, merged: OrderedDict):
         writer = csv.writer(f)
         writer.writerow(["patch", "guc", "version", "doc", "url"])
         for (patch, guc), item in merged.items():
-            writer.writerow([patch, guc, " ".join(item["versions"]), item["doc"], item["url"]])
+            writer.writerow([
+                patch,
+                guc,
+                " ".join(item["versions"]),
+                format_aggregated_doc(item["versions"], item["doc_values"]),
+                item["url"],
+            ])
 
 
 def main() -> None:

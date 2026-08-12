@@ -8,6 +8,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 EXPORT_SCRIPT = SCRIPT_DIR / "patches_and_gucs_csv.py"
+SUMM_SCRIPT = SCRIPT_DIR / "summ_patches_and_gucs_csv_all_versions.py"
 TEMP_OUTPUT = SCRIPT_DIR / "patches_and_gucs.csv"
 
 TARGETS = [
@@ -52,7 +53,18 @@ def main() -> None:
     print("Старт пакетной генерации patches_and_gucs_<version>.csv")
     for version, repo in TARGETS:
         run_one(version, repo)
-    print("\nГотово. Все версии обработаны.")
+
+    if not SUMM_SCRIPT.is_file():
+        raise FileNotFoundError(f"Не найден скрипт агрегации: {SUMM_SCRIPT}")
+
+    print("\n=== Агрегация в summ_patches_and_gucs_all_versions.csv ===")
+    subprocess.run(
+        [sys.executable, str(SUMM_SCRIPT)],
+        cwd=str(SCRIPT_DIR),
+        check=True,
+        stdin=subprocess.DEVNULL,
+    )
+    print("\nГотово. Все версии обработаны и сводка собрана.")
 
 
 if __name__ == "__main__":
