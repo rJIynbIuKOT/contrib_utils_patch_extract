@@ -32,6 +32,10 @@
 
 - `nexus.py` — формирует `nexus.txt` со строками `<name> <version> <git_url> <commit_sha>` из `nexus.json`. От `fstek/fstek.py` отличается раскладкой JSON: компоненты лежат внутри ключа `components`, и `version`/`git` находятся прямо в компоненте, без вложения в `general`. Подробно: [nexus/README.md](nexus/README.md).
 
+### `os_from_conf_json/` — матрица ОС × издание из conf.json
+
+- `os_from_conf_json.py` — пакетно читает `conf.json` и `install-binaries*.sgml` нескольких версий и для каждой пишет `<version>.csv` с колонками `os,be,be_sgml,se,se_sgml,...`. Подробно: [os_from_conf_json/README.md](os_from_conf_json/README.md).
+
 ### `patches_gucs_from_confjson/` — pipeline по патчам и GUC
 
 Связанный набор из 5 скриптов (типовой порядок запуска):
@@ -63,6 +67,7 @@ contrib/                       — contrib.py + contrib_from_differences.py
 contrib_ext_programs/          — ext.py
 fstek/                         — fstek.py
 nexus/                         — nexus.py
+os_from_conf_json/             — os_from_conf_json.py
 patches_gucs_from_confjson/    — patches_for_editions_csv.py + patches_and_gucs*.py + csv_to_conf.py
 patch_to_core_improvements/    — generate_core_improvements_sgml.py
 ppk/                           — ppk.py

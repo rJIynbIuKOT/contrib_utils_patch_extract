@@ -24,7 +24,13 @@ nexus/*
 !nexus/nexus.py
 !nexus/README.md
 
-# В каталоге patches_gucs_from_confjson/ публикуем только сам скрипт и README,
+# В каталоге os_from_conf_json/ публикуем только сам скрипт и README,
+# а сгенерированные 14.csv … 18.csv — нет.
+os_from_conf_json/*
+!os_from_conf_json/os_from_conf_json.py
+!os_from_conf_json/README.md
+
+# В каталоге patches_gucs_from_confjson/ публикуем только скрипты и README,
 # а пользовательский conf.json и сгенерированный pathes.csv — нет.
 patches_gucs_from_confjson/*
 !patches_gucs_from_confjson/export_patches_csv.py
