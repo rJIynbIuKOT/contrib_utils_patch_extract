@@ -18,6 +18,11 @@ DEFAULT_EXCLUDE_EMPTY = True
 
 CONF_RELPATH = Path('tantor') / 'conf.json'
 PATCHES_RELDIR = Path('tantor') / 'patches'
+
+# Ванильная документация PostgreSQL по параметрам конфигурации. Используется только в
+# обратной проверке: если GUC описан здесь полноценной записью со ссылкой, он существует
+# в ядре (или уже уехал в upstream), и претензий к отсутствию его в патчах Tantor нет.
+CONFIG_SGML_RELPATH = Path('doc') / 'src' / 'sgml' / 'config.sgml'
 DOC_RELDIR = Path('tantor') / 'doc' / 'insert_part_sgml'
 DOC_HTML_RELDIR = Path('tantor') / 'doc' / 'output' / 'sphinx_html' / 'ru'
 
@@ -47,6 +52,26 @@ DOC_SEARCH_SOURCES = (
 )
 DOC_FILE_EXTS = (".sgml", ".patch")
 
+# Заголовок секции в конце CSV, где перечислены GUC с описанием, но без определения
+# в коде (обратная проверка к основной таблице). Тот же текст ищет
+# summ_patches_and_gucs_csv_all_versions.py, чтобы отделить секцию от основных строк,
+# поэтому менять его надо в обоих скриптах сразу.
+MISSING_SECTION_TITLE = "GUC с описанием, но отсутствующие в коде"
+
+# Тег <varname> в документации размечает не только GUC: им же оформляют SQL-команды,
+# значения параметров, типы данных и параметры хранения. Такие имена никогда не найдутся
+# в коде, поэтому исключаются из обратной проверки. Список правится вручную по мере
+# появления новых ложных срабатываний.
+IGNORED_DOC_VARNAMES = frozenset({
+    "SET",                                   # SQL-команда
+    "off",                                   # значение параметра
+    "text",                                  # тип данных
+    "bytea",                                 # тип данных
+    "compression",                           # параметр хранения (storage parameter)
+    "compression_page",                      # параметр хранения (storage parameter)
+    "major.maintenance.tantor_maintenance",  # формат номера версии
+})
+
 # Известные издания и их «предпочтительный» порядок — используется и для отображения,
 # и при разрешении приоритетов. В conf.json конкретного репозитория одних может не быть
 # (старые ветки PG 14/15 знают не обо всех изданиях), и это не считается ошибкой:
@@ -64,6 +89,16 @@ GUC_NAME_RE = re.compile(
 
 # В документации (.sgml/.patch) имена GUC оформляются как <varname>имя_guc</varname>.
 VARNAME_RE = re.compile(r'<varname>([^<\s]+)</varname>')
+
+# В config.sgml каждый параметр ядра описан записью со ссылкой:
+#   <varlistentry id="guc-commit-delay" xreflabel="commit_delay">
+#    <term><varname>commit_delay</varname> (<type>integer</type>)
+# Требование «<term> сразу за <varlistentry>» отсекает вложенные записи с примерами
+# значений (HIGH/+3DES/!aNULL у ssl_ciphers) — там в <term> стоит <literal>, а не GUC.
+CONFIG_SGML_GUC_RE = re.compile(
+    r'<varlistentry\s+id="guc-[^"]+"[^>]*>'
+    r'\s*<term>\s*<varname>(?P<name>[A-Za-z_][A-Za-z0-9_.]*)</varname>'
+)
 
 # В сгенерированном HTML каждое описание GUC оформлено как:
 #   <dt id="GUC-…"><span class="term">…<code class="varname">имя_guc</code>…
@@ -162,20 +197,26 @@ def collect_patch_gucs(patches_dir: Path, patch_names: list) -> tuple:
 
 
 def collect_documented_gucs(repo_path: Path) -> tuple:
-    """Возвращает (документированные_по_источникам, кол-во просмотренных файлов).
+    """Возвращает (документированные_по_источникам, где_найдено, кол-во просмотренных файлов).
 
     Первый элемент — dict[имя_GUC -> list[метки источников]] (порядок меток совпадает
     с порядком в DOC_SEARCH_SOURCES, так что в CSV они выводятся стабильно). Имя GUC
     распознаётся как содержимое тега <varname>...</varname> в файлах с расширениями
     DOC_FILE_EXTS из указанных каталогов (рекурсивно).
+
+    Второй элемент — dict[имя_GUC -> list[путь относительно repo_path]] с файлами, где
+    имя встретилось. По этим путям восстанавливается патч для секции «описано, но нет
+    в коде» (см. derive_patch_names). Обход отсортирован, чтобы порядок не зависел от
+    файловой системы.
     """
     documented = {}
+    locations = {}
     files_scanned = 0
     for rel, label in DOC_SEARCH_SOURCES:
         base = repo_path / rel
         if not base.is_dir():
             continue
-        for path in base.rglob("*"):
+        for path in sorted(base.rglob("*")):
             if not path.is_file():
                 continue
             if path.suffix not in DOC_FILE_EXTS:
@@ -185,12 +226,123 @@ def collect_documented_gucs(repo_path: Path) -> tuple:
             except OSError:
                 continue
             files_scanned += 1
+            rel_path = path.relative_to(repo_path)
             for m in VARNAME_RE.finditer(text):
                 name = m.group(1)
                 sources = documented.setdefault(name, [])
                 if label not in sources:
                     sources.append(label)
-    return documented, files_scanned
+                found_in = locations.setdefault(name, [])
+                if rel_path not in found_in:
+                    found_in.append(rel_path)
+    return documented, locations, files_scanned
+
+
+def collect_core_gucs(repo_path: Path) -> set:
+    """Имена GUC ядра из ванильной doc/src/sgml/config.sgml.
+
+    Файл лежит в дереве PostgreSQL и описывает параметры, которые есть в ядре независимо
+    от патчей Tantor. Для обратной проверки такие имена считаются присутствующими в коде
+    наравне с GUC из guc.yaml / guc_tables.yaml / guc_c.yaml.
+
+    Если файла нет, возвращается пустое множество — проверка просто станет строже.
+    """
+    path = repo_path / CONFIG_SGML_RELPATH
+    if not path.is_file():
+        return set()
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return set()
+    return {m.group("name") for m in CONFIG_SGML_GUC_RE.finditer(text)}
+
+
+def build_patch_name_candidates(patches_dir: Path, patch_names: list) -> list:
+    """Кандидаты для восстановления имени патча по имени sgml-файла.
+
+    Кроме патчей из conf.json берутся все реальные подкаталоги tantor/patches: имя файла
+    документации порой соответствует промежуточному каталогу, а не листовому патчу
+    (perf_insert_parallel_*.sgml → perf/insert_parallel, у которого в conf.json есть только
+    варианты guc_default_disable/guc_default_enable).
+
+    Отсортировано от длинных к коротким, чтобы derive_patch_from_doc_stem брал самое
+    точное совпадение первым.
+    """
+    candidates = set(patch_names)
+    if patches_dir.is_dir():
+        for path in patches_dir.rglob("*"):
+            if path.is_dir():
+                candidates.add(path.relative_to(patches_dir).as_posix())
+    return sorted(candidates, key=lambda c: (-len(c), c))
+
+
+def derive_patch_from_doc_stem(stem: str, candidates: list) -> str:
+    """Восстанавливает имя патча по имени файла в tantor/doc/insert_part_sgml.
+
+    Файлы там названы по патчу с заменой «/» на «_» и необязательным суффиксом:
+    perf_relocate_sub_plan.sgml → perf/relocate_sub_plan, func_smgr_create_index.sgml →
+    func/smgr, perf_buf_part1.sgml → perf/buf_part.
+
+    Берётся самый длинный кандидат, «плоское» имя которого является префиксом stem.
+    Остаток должен быть пустым, начинаться с «_» или быть числом — иначе это случайное
+    совпадение на середине слова. Если ничего не подошло, возвращается пустая строка.
+    """
+    for candidate in candidates:
+        flat = candidate.replace("/", "_")
+        if not stem.startswith(flat):
+            continue
+        rest = stem[len(flat):]
+        if rest and not rest.startswith("_") and not rest.isdigit():
+            continue
+        return candidate
+    return ""
+
+
+def derive_patch_names(locations: list, candidates: list) -> list:
+    """Имена патчей, которым принадлежат файлы с описанием GUC.
+
+    Для файлов из tantor/patches патч берётся прямо из пути (каталог патча), для файлов
+    документации — по имени файла. Результат отсортирован, чтобы CSV не зависел от
+    порядка обхода.
+    """
+    names = set()
+    for rel_path in locations:
+        if PATCHES_RELDIR in rel_path.parents:
+            # as_posix() даёт ".", если файл лежит прямо в tantor/patches, — такой патч
+            # не определить, и в CSV лучше пустая ячейка, чем точка.
+            derived = rel_path.relative_to(PATCHES_RELDIR).parent.as_posix()
+            if derived == ".":
+                derived = ""
+        else:
+            derived = derive_patch_from_doc_stem(rel_path.stem, candidates)
+        if derived:
+            names.add(derived)
+    return sorted(names)
+
+
+def collect_documented_not_in_code(
+    documented_gucs: dict, patch_to_gucs: dict, core_gucs: set,
+) -> list:
+    """Обратная проверка: какие описанные GUC не находятся в коде.
+
+    «Код» — объединение двух источников: GUC патчей из GUC_FILENAMES (guc.yaml /
+    guc_tables.yaml / guc_c.yaml), то есть то же множество, что попадает в основную таблицу
+    CSV, и GUC ядра из doc/src/sgml/config.sgml (core_gucs). Второй источник убирает из
+    отчёта ванильные параметры PostgreSQL, которые Tantor не определяет, но упоминает
+    в описаниях патчей.
+
+    Имена из IGNORED_DOC_VARNAMES отбрасываются как заведомо не-GUC.
+
+    Возвращает отсортированный список имён, чтобы порядок в CSV не зависел от порядка
+    обхода файлов документации.
+    """
+    in_code = {guc for gucs in patch_to_gucs.values() for guc in gucs}
+    in_code |= core_gucs
+    return sorted(
+        name
+        for name in documented_gucs
+        if name not in in_code and name not in IGNORED_DOC_VARNAMES
+    )
 
 
 def format_doc_cell(guc_name: str, documented_gucs: dict) -> str:
@@ -254,6 +406,32 @@ def collect_html_guc_urls(repo_path: Path, doc_version: str) -> tuple:
     return name_to_url, files_scanned
 
 
+def write_missing_section(
+    writer,
+    missing_in_code: list,
+    documented_gucs: dict,
+    guc_urls: dict,
+    missing_patches: dict,
+) -> None:
+    """Дописывает в конец CSV секцию «описано, но нет в коде».
+
+    Секция отделена пустой строкой и строкой-заголовком MISSING_SECTION_TITLE в колонке
+    `patch`; столбцы те же, что и в основной таблице. В `patch` идут патчи, в файлах
+    которых нашлось описание (их может быть несколько — тогда через пробел).
+    Заголовок пишется всегда, даже если список пуст — так формат файла остаётся
+    предсказуемым для скрипта агрегации.
+    """
+    writer.writerow(["", "", "", ""])
+    writer.writerow([MISSING_SECTION_TITLE, "", "", ""])
+    for name in missing_in_code:
+        writer.writerow([
+            " ".join(missing_patches.get(name, [])),
+            name,
+            format_doc_cell(name, documented_gucs),
+            guc_urls.get(name, ""),
+        ])
+
+
 def write_csv(
     output_path: Path,
     patch_names: list,
@@ -261,12 +439,17 @@ def write_csv(
     documented_gucs: dict,
     guc_urls: dict,
     exclude_empty: bool,
+    missing_in_code: list,
+    missing_patches: dict,
 ) -> int:
-    """Возвращает число записанных в CSV патчей (без шапки).
+    """Возвращает число записанных в CSV патчей (без шапки и без секции с отсутствующими).
 
     Если exclude_empty=True — патчи без GUC в CSV не попадают вообще (одна строка с
     пустыми колонками для них тоже не пишется). При exclude_empty=False сохраняется
     прежнее поведение: для патчей без GUC выводится одна строка с пустыми колонками.
+
+    После основной таблицы всегда дописывается секция с GUC, у которых есть описание,
+    но нет определения в коде (см. write_missing_section).
     """
     written = 0
     with output_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -295,6 +478,9 @@ def write_csv(
                     guc_urls.get(guc, ""),
                 ])
             written += 1
+        write_missing_section(
+            writer, missing_in_code, documented_gucs, guc_urls, missing_patches,
+        )
     return written
 
 
@@ -417,15 +603,24 @@ def main() -> None:
         raise ValueError('Key "editions" must contain a dictionary.')
     patch_names = collect_all_patches(editions_obj, present_editions)
     patch_to_gucs, patches_with_guc_files = collect_patch_gucs(patches_dir, patch_names)
-    documented_gucs, doc_files_scanned = collect_documented_gucs(repo_path)
+    documented_gucs, doc_locations, doc_files_scanned = collect_documented_gucs(repo_path)
 
     tantor_version = (data.get("global") or {}).get("tantor_version", "")
     doc_version = derive_doc_version(tantor_version)
     guc_urls, html_files_scanned = collect_html_guc_urls(repo_path, doc_version)
 
+    core_gucs = collect_core_gucs(repo_path)
+    missing_in_code = collect_documented_not_in_code(documented_gucs, patch_to_gucs, core_gucs)
+    patch_candidates = build_patch_name_candidates(patches_dir, patch_names)
+    missing_patches = {
+        name: derive_patch_names(doc_locations.get(name, []), patch_candidates)
+        for name in missing_in_code
+    }
+
     output_path = Path(OUTPUT_FILE).resolve()
     rows_patches = write_csv(
         output_path, patch_names, patch_to_gucs, documented_gucs, guc_urls, exclude_empty,
+        missing_in_code, missing_patches,
     )
 
     patches_with_gucs = sum(1 for v in patch_to_gucs.values() if v)
@@ -466,6 +661,16 @@ def main() -> None:
     missing_known = [e for e in EDITION_ORDER if e not in present_editions]
     if missing_known:
         print(f"  В conf.json отсутствуют (это нормально для старых веток): {', '.join(missing_known)}")
+
+    print(f"  Описано в документации имён:        {len(documented_gucs)} (исключено как не-GUC: {len(IGNORED_DOC_VARNAMES)})")
+    print(f"  GUC ядра из {CONFIG_SGML_RELPATH}: {len(core_gucs) or 'файл не найден'}")
+    if missing_in_code:
+        print(f"  Описано, но НЕ найдено в коде:       {len(missing_in_code)}")
+        for name in missing_in_code:
+            where = " ".join(missing_patches.get(name, [])) or "патч не определён"
+            print(f"    - {name} ({format_doc_cell(name, documented_gucs)}) <- {where}")
+    else:
+        print("  Описано, но НЕ найдено в коде:       0")
     print("Обработка завершена.")
 
 

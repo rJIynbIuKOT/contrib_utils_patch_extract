@@ -22,6 +22,11 @@ VERSION_FILES = [
     ("14", "patches_and_gucs_14.csv"),
 ]
 
+# Строка-заголовок секции «описано, но нет в коде» во входных файлах. Её пишет
+# patches_and_gucs_csv.py (константа MISSING_SECTION_TITLE), и этим же заголовком
+# отделяется вторая таблица в итоговой сводке. Менять надо в обоих скриптах сразу.
+MISSING_SECTION_TITLE = "GUC с описанием, но отсутствующие в коде"
+
 
 def normalize(value: str) -> str:
     return (value or "").strip()
@@ -39,28 +44,42 @@ def documented_versions(doc_values: OrderedDict) -> list:
     return versions
 
 
+def format_doc_groups(doc_values: OrderedDict) -> str:
+    """«<версии> <статус>», через «; » — если статус документации различается по версиям."""
+    documented = [(status, versions) for status, versions in doc_values.items() if status and status != "no"]
+    if not documented:
+        return "no"
+    return "; ".join(f"{' '.join(versions)} {status}" for status, versions in documented)
+
+
 def format_aggregated_doc(guc_versions: list, doc_values: OrderedDict) -> str:
     """Собирает doc для сводки: «<версии> yes (...); …» по группам статуса документации.
 
     Если набор версий GUC не совпадает с набором версий, где найден <varname>,
     в начало ставится «! » (в обе стороны: GUC без описания или описание без GUC).
     """
-    documented = [(status, versions) for status, versions in doc_values.items() if status and status != "no"]
-    if not documented:
-        text = "no"
-    elif len(documented) == 1:
-        status, versions = documented[0]
-        text = f"{' '.join(versions)} {status}"
-    else:
-        text = "; ".join(f"{' '.join(versions)} {status}" for status, versions in documented)
-
+    text = format_doc_groups(doc_values)
     if set(guc_versions) != set(documented_versions(doc_values)):
         return f"! {text}"
     return text
 
 
-def iter_rows(path: Path):
-    """Итерирует пары (patch, guc, doc, url) с учётом продолжений строк."""
+def read_version_file(path: Path) -> tuple:
+    """Разбирает файл версии на две части.
+
+    Возвращает (main_rows, missing_rows), где main_rows — список (patch, guc, doc, url)
+    основной таблицы с раскрытыми продолжениями строк, а missing_rows — список
+    (patch, guc, doc, url) из секции MISSING_SECTION_TITLE в конце файла. В секции в
+    колонке `patch` может стоять несколько имён через пробел — описание GUC встречается
+    в файлах сразу нескольких патчей.
+
+    Секция отделяется строкой, у которой в колонке `patch` стоит MISSING_SECTION_TITLE;
+    всё после неё в основную таблицу не попадает. Файлы, сделанные старой версией
+    patches_and_gucs_csv.py, просто не содержат такой строки — тогда missing_rows пуст.
+    """
+    main_rows = []
+    missing_rows = []
+
     with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         required = {"patch", "guc", "doc", "url"}
@@ -69,11 +88,21 @@ def iter_rows(path: Path):
             raise ValueError(f"{path.name}: отсутствуют колонки: {', '.join(missing)}")
 
         current_patch = ""
+        in_missing_section = False
         for row in reader:
             patch = normalize(row.get("patch", ""))
             guc = normalize(row.get("guc", ""))
             doc = normalize(row.get("doc", ""))
             url = normalize(row.get("url", ""))
+
+            if patch == MISSING_SECTION_TITLE:
+                in_missing_section = True
+                continue
+
+            if in_missing_section:
+                if guc:
+                    missing_rows.append((patch, guc, doc, url))
+                continue
 
             if patch:
                 current_patch = patch
@@ -84,11 +113,47 @@ def iter_rows(path: Path):
             if not patch or not guc:
                 continue
 
-            yield patch, guc, doc, url
+            main_rows.append((patch, guc, doc, url))
+
+    return main_rows, missing_rows
+
+
+def add_occurrence(bucket: OrderedDict, key, version: str, doc: str, url: str, patch: str = "") -> None:
+    """Накапливает версии, статусы doc, первый непустой url и имена патчей для ключа.
+
+    `patch` заполняется только для секции «описано, но нет в коде»: там ключ — сам GUC,
+    а патчи в разных версиях могут отличаться, поэтому их надо объединять. В основной
+    таблице патч входит в ключ, и аргумент не используется.
+    """
+    item = bucket.get(key)
+    if item is None:
+        item = {
+            "versions": [],
+            "url": "",
+            "doc_values": OrderedDict(),
+            "patches": [],
+        }
+        bucket[key] = item
+
+    for name in patch.split():
+        if name not in item["patches"]:
+            item["patches"].append(name)
+
+    if version not in item["versions"]:
+        item["versions"].append(version)
+
+    if doc not in item["doc_values"]:
+        item["doc_values"][doc] = []
+    item["doc_values"][doc].append(version)
+
+    # Сохраняем первый непустой url в порядке от новых к старым.
+    if item["url"] == "" and url:
+        item["url"] = url
 
 
 def aggregate_rows(base_dir: Path):
     merged = OrderedDict()
+    missing = OrderedDict()
     doc_conflicts = []
 
     for version, filename in VERSION_FILES:
@@ -96,27 +161,13 @@ def aggregate_rows(base_dir: Path):
         if not path.exists():
             raise FileNotFoundError(f"Не найден входной файл: {path}")
 
-        for patch, guc, doc, url in iter_rows(path):
-            key = (patch, guc)
-            item = merged.get(key)
-            if item is None:
-                item = {
-                    "versions": [],
-                    "url": "",
-                    "doc_values": OrderedDict(),
-                }
-                merged[key] = item
+        main_rows, missing_rows = read_version_file(path)
 
-            if version not in item["versions"]:
-                item["versions"].append(version)
+        for patch, guc, doc, url in main_rows:
+            add_occurrence(merged, (patch, guc), version, doc, url)
 
-            if doc not in item["doc_values"]:
-                item["doc_values"][doc] = []
-            item["doc_values"][doc].append(version)
-
-            # Сохраняем первый непустой url в порядке от новых к старым.
-            if item["url"] == "" and url:
-                item["url"] = url
+        for patch, guc, doc, url in missing_rows:
+            add_occurrence(missing, guc, version, doc, url, patch)
 
     # Предупреждаем, если статус doc (yes/no и источник) различается между версиями.
     for (patch, guc), item in merged.items():
@@ -130,10 +181,17 @@ def aggregate_rows(base_dir: Path):
             details.append(f'"{doc_value}" в версиях: {" ".join(versions)}')
         doc_conflicts.append((patch, guc, "; ".join(details)))
 
-    return merged, doc_conflicts
+    return merged, missing, doc_conflicts
 
 
-def write_output(path: Path, merged: OrderedDict):
+def write_output(path: Path, merged: OrderedDict, missing: OrderedDict):
+    """Пишет основную таблицу и, следом, отдельную таблицу «описано, но нет в коде».
+
+    Вторая таблица использует те же колонки: имя GUC в `guc`, версии, где оно описано
+    и при этом отсутствует в коде, — в `version`, статус документации — в `doc`,
+    а в `patch` — патчи, в файлах которых лежит лишнее описание (не те, что определяют
+    GUC: определения как раз и нет).
+    """
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["patch", "guc", "version", "doc", "url"])
@@ -146,17 +204,32 @@ def write_output(path: Path, merged: OrderedDict):
                 item["url"],
             ])
 
+        writer.writerow(["", "", "", "", ""])
+        writer.writerow([MISSING_SECTION_TITLE, "", "", "", ""])
+        for guc, item in sorted(missing.items()):
+            writer.writerow([
+                " ".join(sorted(item["patches"])),
+                guc,
+                " ".join(item["versions"]),
+                format_doc_groups(item["doc_values"]),
+                item["url"],
+            ])
+
 
 def main() -> None:
     base_dir = Path(".").resolve()
-    merged, doc_conflicts = aggregate_rows(base_dir)
+    merged, missing, doc_conflicts = aggregate_rows(base_dir)
 
     output_path = (base_dir / OUTPUT_FILE).resolve()
-    write_output(output_path, merged)
+    write_output(output_path, merged, missing)
 
     print(f"Создан CSV: {output_path}")
     print(f"  Уникальных пар patch+guc: {len(merged)}")
     print(f"  Обработано версий: {len(VERSION_FILES)} ({', '.join(v for v, _ in VERSION_FILES)})")
+    print(f"  {MISSING_SECTION_TITLE}: {len(missing)}")
+    for guc, item in sorted(missing.items()):
+        where = " ".join(sorted(item["patches"])) or "патч не определён"
+        print(f"  - {guc}: {' '.join(item['versions'])} <- {where}")
 
     if doc_conflicts:
         print("\nПРЕДУПРЕЖДЕНИЕ: найдено расхождение значений колонки doc между версиями.")

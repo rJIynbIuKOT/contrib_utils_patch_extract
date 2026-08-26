@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate <edition>.sgml Core improvements section from conf.json, order.json,
-and patch_descriptions.json.
+Generate generated_<edition>.sgml Core improvements sections from conf.json,
+order.json, and patch_descriptions.json for target editions
+(be, certified, certified_2, se, se1c). Editions missing from conf.json are
+skipped; free and persey are ignored.
 
 Use description_en (or variants for multi-line items) for output text. Plain
 text is XML-escaped; if the string looks like SGML (contains <...>), it is
@@ -27,6 +29,9 @@ DEFAULT_CONF = Path("conf.json")
 DEFAULT_ORDER = Path("order.json")
 DEFAULT_DESCRIPTIONS = Path("patch_descriptions.json")
 DEFAULT_SECTION_ID = "differences-core-improvements"
+
+# free и persey не обрабатываем, даже если они есть в conf.json.
+TARGET_EDITIONS = ("be", "certified", "certified_2", "se", "se1c")
 
 
 # Group key: both patches in edition → groups.sgml_listitem; else standalone patch text.
@@ -334,27 +339,12 @@ def prompt_path(prompt_text: str, default_path: Path) -> Path:
     return Path(raw) if raw else default_path
 
 
-def resolve_edition(cli_edition: str | None, editions: dict) -> str:
-    """Берём edition из argv, иначе спрашиваем интерактивно (со списком известных)."""
-    if cli_edition:
-        return cli_edition.strip()
-    known = sorted(editions.keys())
-    print(f"Доступные издания: {', '.join(known) if known else '(пусто)'}")
-    try:
-        return input("Введите edition (например, se): ").strip()
-    except EOFError:
-        return ''
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate Core improvements SGML for an edition.",
-    )
-    parser.add_argument(
-        "edition",
-        nargs="?",
-        default=None,
-        help="Edition short name: se, be, certified, se1c, free, certified_2, ...",
+        description=(
+            "Generate Core improvements SGML for editions "
+            f"{', '.join(TARGET_EDITIONS)}."
+        ),
     )
     parser.add_argument(
         "--conf",
@@ -367,20 +357,13 @@ def main() -> None:
         "--order",
         type=Path,
         default=None,
-        help=f"Path to order.json (default: рядом с conf.json или ./{DEFAULT_ORDER})",
+        help=f"Path to order.json (default: ./{DEFAULT_ORDER} рядом со скриптом)",
     )
     parser.add_argument(
         "--descriptions",
         type=Path,
         default=None,
-        help=f"Path to patch_descriptions.json (default: рядом с conf.json или ./{DEFAULT_DESCRIPTIONS})",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        default=None,
-        help="Output file (default: ./generated_<edition>.sgml)",
+        help=f"Path to patch_descriptions.json (default: ./{DEFAULT_DESCRIPTIONS} рядом со скриптом)",
     )
     parser.add_argument(
         "--section-id",
@@ -389,40 +372,25 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    interactive = args.edition is None
-
     if args.conf is not None:
         conf_path = args.conf
-    elif interactive:
+    else:
         conf_path = prompt_path(
             f"Путь до conf.json (Enter — использовать ./{DEFAULT_CONF}): ",
             DEFAULT_CONF,
         )
-    else:
-        conf_path = DEFAULT_CONF
 
-    conf_dir = conf_path.parent
-    order_path = args.order if args.order is not None else conf_dir / DEFAULT_ORDER
+    # order.json и patch_descriptions.json всегда рядом со скриптом,
+    # даже если --conf указывает на файл в другой папке.
+    order_path = args.order if args.order is not None else DEFAULT_ORDER
     descriptions_path = (
         args.descriptions if args.descriptions is not None
-        else conf_dir / DEFAULT_DESCRIPTIONS
+        else DEFAULT_DESCRIPTIONS
     )
 
     print(f"Источник: локальный файл {conf_path.resolve()}")
     conf = load_json(conf_path)
     editions = conf.get("editions") or {}
-
-    edition = resolve_edition(args.edition, editions)
-    if not edition:
-        raise RuntimeError(
-            "Не указано издание (edition). Передай его аргументом или введи в ответ на запрос."
-        )
-    if edition not in editions:
-        raise RuntimeError(
-            f"Неизвестное издание {edition!r}. Доступные: {sorted(editions.keys())}"
-        )
-
-    edition_patches = set(editions[edition].get("patches") or [])
 
     order_data = load_json(order_path)
     order_items = order_data.get("items_order") or []
@@ -431,21 +399,28 @@ def main() -> None:
     desc_data = load_json(descriptions_path)
     patches = desc_data.get("patches") or {}
     groups = desc_data.get("groups") or {}
-    warn_missing_descriptions(edition, edition_patches, patches, groups)
-    warn_empty_descriptions(edition, edition_patches, patches, groups)
-    warn_patches_missing_in_order(edition, edition_patches, order_items)
 
-    out_path = args.output or Path(f"generated_{edition}.sgml")
+    for edition in TARGET_EDITIONS:
+        if edition not in editions:
+            print(f"Издание {edition!r} отсутствует в conf.json, пропускаю.")
+            continue
 
-    sgml = build_sgml(
-        edition_patches,
-        order_items,
-        patches,
-        groups,
-        section_id,
-    )
-    out_path.write_text(sgml, encoding="utf-8")
-    print(f"Файл {out_path.resolve()} успешно создан.")
+        edition_patches = set(editions[edition].get("patches") or [])
+        warn_missing_descriptions(edition, edition_patches, patches, groups)
+        warn_empty_descriptions(edition, edition_patches, patches, groups)
+        warn_patches_missing_in_order(edition, edition_patches, order_items)
+
+        out_path = Path(f"generated_{edition}.sgml")
+        sgml = build_sgml(
+            edition_patches,
+            order_items,
+            patches,
+            groups,
+            section_id,
+        )
+        out_path.write_text(sgml, encoding="utf-8")
+        print(f"Файл {out_path.resolve()} успешно создан.")
+
     print("Обработка завершена.")
 
 
