@@ -8,10 +8,10 @@ import traceback
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 DEFAULT_CONTRIB_JSON = [
-    '/home/kot/repo/tantor-db-18_3/tantor/contrib/contrib.json',
-    '/home/kot/repo/tantor-db-17_10/tantor/contrib/contrib.json',
-    '/home/kot/repo/tantor-db-16_14/tantor/contrib/contrib.json',
-    '/home/kot/repo/tantor-db-15_18/tantor/contrib/contrib.json',
+    '/home/kot/repo/tantor-db-18_6/tantor/contrib/contrib.json',
+    '/home/kot/repo/tantor-db-17_11/tantor/contrib/contrib.json',
+    '/home/kot/repo/tantor-db-16_15/tantor/contrib/contrib.json',
+    '/home/kot/repo/tantor-db-15_19/tantor/contrib/contrib.json',
     '/home/kot/repo/tantor-db-14_23/tantor/contrib/contrib.json',
 ]
 
