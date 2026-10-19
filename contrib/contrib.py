@@ -108,14 +108,19 @@ def find_control_file(ext_dir, name):
 
 
 def collect_doc_versions(contrib_dir):
-    """Обходит каталоги расширений и собирает версии из <name>.sgml."""
+    """Обходит каталоги расширений и собирает версии из <name>.sgml.
+
+    Возвращает (versions, with_sgml): словарь версий и множество имён,
+    у которых есть файл <name>.sgml.
+    """
     versions = {}
+    with_sgml = set()
     if not contrib_dir:
         print("Каталог contrib не задан — версии из sgml не будут добавлены.")
-        return versions
+        return versions, with_sgml
     if not os.path.isdir(contrib_dir):
         print(f"Каталог contrib не найден: {contrib_dir}")
-        return versions
+        return versions, with_sgml
 
     print(f"Каталог contrib: {os.path.abspath(contrib_dir)}")
     for entry in sorted(os.listdir(contrib_dir)):
@@ -125,12 +130,13 @@ def collect_doc_versions(contrib_dir):
         sgml_path = os.path.join(ext_dir, f"{entry}.sgml")
         if not os.path.isfile(sgml_path):
             continue
+        with_sgml.add(entry)
         doc_version = extract_doc_version(sgml_path)
         if doc_version:
             versions[entry] = doc_version
 
     print(f"Найдено версий документации в sgml: {len(versions)}")
-    return versions
+    return versions, with_sgml
 
 
 def collect_control_versions(contrib_dir):
@@ -250,6 +256,15 @@ def write_output_file(filename, records):
         else:
             file.write("Все расширения с версиями в sgml\n")
 
+        file.write('\n')
+        no_sgml_file = [r['name'] for r in records if r['no_sgml_file']]
+        if no_sgml_file:
+            file.write("Расширения без sgml:\n")
+            for name in no_sgml_file:
+                file.write(f"{name}\n")
+        else:
+            file.write("Все расширения с sgml\n")
+
 
 def process_contrib_json(json_path, include_url):
     label = version_label_from_path(json_path)
@@ -260,7 +275,7 @@ def process_contrib_json(json_path, include_url):
         raise FileNotFoundError(f"Файл не найден: {json_path}")
 
     data = load_contrib(json_path)
-    doc_versions = collect_doc_versions(contrib_dir)
+    doc_versions, with_sgml = collect_doc_versions(contrib_dir)
     control_versions = collect_control_versions(contrib_dir)
 
     edition_records = {edition: [] for edition in EDITIONS}
@@ -281,10 +296,12 @@ def process_contrib_json(json_path, include_url):
             include_url=include_url,
         )
         record = {
+            'name': name,
             'entry': entry,
             'mismatch': versions_mismatch(version, doc_version, control_version),
             'no_control': control_version is None,
             'no_sgml': doc_version is None,
+            'no_sgml_file': name not in with_sgml,
         }
 
         all_records[name] = record

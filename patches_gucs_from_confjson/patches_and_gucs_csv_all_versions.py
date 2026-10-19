@@ -12,10 +12,10 @@ SUMM_SCRIPT = SCRIPT_DIR / "summ_patches_and_gucs_csv_all_versions.py"
 TEMP_OUTPUT = SCRIPT_DIR / "patches_and_gucs.csv"
 
 TARGETS = [
-    ("18", Path("/home/kot/repo/tantor-db-18_3/")),
-    ("17", Path("/home/kot/repo/tantor-db-17_10/")),
-    ("16", Path("/home/kot/repo/tantor-db-16_14/")),
-    ("15", Path("/home/kot/repo/tantor-db-15_18/")),
+    ("18", Path("/home/kot/repo/tantor-db-18_6/")),
+    ("17", Path("/home/kot/repo/tantor-db-17_11/")),
+    ("16", Path("/home/kot/repo/tantor-db-16_15/")),
+    ("15", Path("/home/kot/repo/tantor-db-15_19/")),
     ("14", Path("/home/kot/repo/tantor-db-14_23/")),
 ]
 

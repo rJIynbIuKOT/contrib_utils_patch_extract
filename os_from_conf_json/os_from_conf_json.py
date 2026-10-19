@@ -10,10 +10,10 @@ from pathlib import Path
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 TARGETS = [
-    ("18", Path("/home/kot/repo/tantor-db-18_3/tantor/conf.json")),
-    ("17", Path("/home/kot/repo/tantor-db-17_10/tantor/conf.json")),
-    ("16", Path("/home/kot/repo/tantor-db-16_14/tantor/conf.json")),
-    ("15", Path("/home/kot/repo/tantor-db-15_18/tantor/conf.json")),
+    ("18", Path("/home/kot/repo/tantor-db-18_6/tantor/conf.json")),
+    ("17", Path("/home/kot/repo/tantor-db-17_11/tantor/conf.json")),
+    ("16", Path("/home/kot/repo/tantor-db-16_15/tantor/conf.json")),
+    ("15", Path("/home/kot/repo/tantor-db-15_19/tantor/conf.json")),
     ("14", Path("/home/kot/repo/tantor-db-14_23/tantor/conf.json")),
 ]
 

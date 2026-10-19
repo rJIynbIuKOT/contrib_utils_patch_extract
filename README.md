@@ -1,6 +1,6 @@
 # contrib_utils_patch_extract
 
-Набор небольших Python-скриптов для подготовки сводных отчётов по составу продукта Tantor: списков contrib-расширений, утилит, внешних программ, патчей и компонентов сборки. Каждый скрипт — самостоятельный, без сторонних зависимостей (только стандартная библиотека Python 3.6+), без сетевых вызовов и работает только с локальными файлами.
+Набор небольших Python-скриптов для подготовки сводных отчётов по составу продукта Tantor: списков contrib-расширений, утилит, внешних программ, патчей и компонентов сборки. Каждый скрипт — самостоятельный, без сторонних зависимостей (только стандартная библиотека Python 3.6+). Почти все работают только с локальными файлами и не ходят в сеть; исключение — `cve-collect/cve-collect.py`, который скачивает HTML-страницу по URL.
 
 Все скрипты следуют общему стилю запуска:
 
@@ -13,12 +13,16 @@
 
 ## Каталоги и скрипты
 
+### `cve-collect/` — список CVE со страницы release notes
+
+- `cve-collect.py` — скачивает HTML-страницу по URL (например, [Release 14.24](https://www.postgresql.org/docs/14/release-14-24.html)) и пишет в `cve.txt` уникальные идентификаторы вида `CVE-YYYY-NNNN`, найденные **в скобках**: `(CVE-2026-6471)`, `(CVE-2026-14663)`. Упоминания без скобок пропускаются. Список сортируется по году и порядковому номеру и дублируется в терминал. Подробно: [cve-collect/README.md](cve-collect/README.md).
+
 ### `contrib/` — списки contrib-расширений по изданиям
 
 Два независимых скрипта, которые удобно использовать в одном цикле подготовки списков contrib-расширений:
 
 - `contrib.py` — генерирует по изданиям (`be`, `se`, `se-1c`, `certified`, `certified-2`, `free`) текстовые файлы вида `<name> <version> <url>` из `contrib.json`. Версия извлекается из ссылки `current_version` набором регулярных выражений. Дополнительно создаётся сводный `all.txt`. Подробно: [contrib/README.md](contrib/README.md).
-- `contrib_from_differences.py` — извлекает плоский список contrib-расширений из раздела `<sect2 id="differences-contrib">` файла `differences.sgml` и пишет имена в `contrib.txt` по одному на строку. Подробно: [contrib/README_contrib_from_differences.md](contrib/README_contrib_from_differences.md).
+- `compare_with_differences.py` — извлекает списки contrib-расширений из `<sect2 id="differences-contrib">` в `differences_*.sgml` по изданиям, сравнивает их с выходом `contrib.py` и пишет `contrib_18_6_*.txt`. Подробно: [contrib/README_compare_with_differences.md](contrib/README_compare_with_differences.md).
 
 ### `contrib_ext_programs/` — таблица внешних программ
 
@@ -63,8 +67,9 @@
 ## Структура репозитория (кратко)
 
 ```
-contrib/                       — contrib.py + contrib_from_differences.py
+contrib/                       — contrib.py + compare_with_differences.py
 contrib_ext_programs/          — ext.py
+cve-collect/                   — cve-collect.py
 fstek/                         — fstek.py
 nexus/                         — nexus.py
 os_from_conf_json/             — os_from_conf_json.py
@@ -77,5 +82,5 @@ utils/                         — utils.py
 ## Требования
 
 - Python 3.6+ (только стандартная библиотека).
-- Сеть не нужна ни одному из скриптов.
+- Сеть нужна только `cve-collect/cve-collect.py` (загрузка HTML-страницы). Остальные скрипты работают офлайн.
 - Любые входные `*.json`/`*.sgml` — локальные файлы. Если репозиторий-источник приватный, скачайте файл через браузер (`Raw` → «Сохранить как…») и передайте путь скрипту аргументом или интерактивно.

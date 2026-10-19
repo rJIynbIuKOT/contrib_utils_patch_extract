@@ -1,10 +1,16 @@
+# В каталоге cve-collect/ публикуем только сам скрипт и README,
+# а сгенерированный cve.txt — нет.
+cve-collect/*
+!cve-collect/cve-collect.py
+!cve-collect/README.md
+
 # В каталоге contrib/ публикуем только сами скрипты и их README,
 # а пользовательские contrib.json/differences.sgml и сгенерированные *.txt — нет.
 contrib/*
 !contrib/contrib.py
-!contrib/contrib_from_differences.py
+!contrib/compare_with_differences.py
 !contrib/README.md
-!contrib/README_contrib_from_differences.md
+!contrib/README_compare_with_differences.md
 
 # В каталоге contrib_ext_programs/ публикуем только сам скрипт и README,
 # а пользовательский config.json и сгенерированный ext.txt — нет.
@@ -40,6 +46,8 @@ patches_gucs_from_confjson/*
 !patches_and_gucs_csv_all_versions.py
 !summ_patches_and_gucs_csv_all_versions.py
 !csv_to_conf.py
+!hidden_gucs_csv.py
+!patches_gucs_from_confjson/hidden_gucs_csv.py
 
 
 # В каталоге utils/ публикуем только сам скрипт и README,
