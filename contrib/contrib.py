@@ -12,10 +12,10 @@ DEFAULT_CONTRIB_JSON = [
     '/home/kot/repo/tantor-db-17_11/tantor/contrib/contrib.json',
     '/home/kot/repo/tantor-db-16_15/tantor/contrib/contrib.json',
     '/home/kot/repo/tantor-db-15_19/tantor/contrib/contrib.json',
-    '/home/kot/repo/tantor-db-14_23/tantor/contrib/contrib.json',
+    '/home/kot/repo/tantor-db-14_24/tantor/contrib/contrib.json',
 ]
 
-EDITIONS = ['be', 'se', 'se-1c', 'certified', 'certified-2', 'free']
+EDITIONS = ['be', 'se', 'se-1c', 'certified', 'certified-2', 'free', 'persey']
 
 DOC_VERSION_RE = re.compile(
     r'<emphasis\s+role="strong">\s*Version\s*:?\s*</emphasis>\s*:?\s*'
