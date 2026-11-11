@@ -20,8 +20,8 @@ def generate_from_utils_json(json_file, output_file):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    edition_order_json = ['be', 'se', 'se-1c', 'certified', 'certified-2']
-    edition_output_names = ['be', 'se', 'se1c', 'certified', 'certified_2']
+    edition_order_json = ['be', 'se', 'se-1c', 'certified', 'certified-2', 'persey']
+    edition_output_names = ['be', 'se', 'se1c', 'certified', 'certified_2', 'persey']
 
     editions_dict = {edition: [] for edition in edition_order_json}
     utils_editions = {}
